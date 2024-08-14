@@ -49,8 +49,8 @@ pipeline {
         stage('Build Image') {
             steps {
                 script {
-                    sh 'cat /etc/ssl/cert.pem'
-                    sh 'curl -vvv https://auth.docker.io/token'
+                    sh '${DOCKER_HOME} pull openjdk:23-rc-jdk-slim'
+                    // sh 'curl -vvv https://auth.docker.io/token'
                     sh '${DOCKER_HOME} network prune --force'
                     sh '${DOCKER_HOME} build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
                 }
