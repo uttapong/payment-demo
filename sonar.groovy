@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     parameters {
-        string(name: 'GIT_URL', defaultValue: 'git@gitlab.devopsnonprd.vayuktbcs:ctp/phase2/ctp-api-gateway.git', description: 'Git repository URL')
+        string(name: 'GIT_URL', defaultValue: 'git', description: 'Git repository URL')
         string(name: 'GIT_BRANCH', defaultValue: 'develop', description: 'Git branch to build')
         string(name: 'SONAR_PROJECT_KEY', defaultValue: 'jenkins', description: 'SonarQube project key')
     }
