@@ -1,8 +1,11 @@
-# Use an official OpenJDK runtime as a parent image
-FROM openjdk:23-rc-jdk-slim
+# Use a stable and minimal OpenJDK image
+FROM openjdk:17-slim-buster
 
-# Install curl
-RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+# Install curl with minimal dependencies
+RUN apt-get update && \
+    apt-get install --no-install-recommends -y curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Set the working directory inside the container
 WORKDIR /app

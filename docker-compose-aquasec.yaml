@@ -1,0 +1,34 @@
+version: '3.7'
+
+services:
+  # Aqua Server
+  aqua-server:
+    image: aquasec/server:latest
+    container_name: aqua-server
+    environment:
+      - SCALOCK_DBUSER=postgres
+      - SCALOCK_DBPASSWORD=postgrespassword
+      - SCALOCK_DBNAME=slkdb
+      - SCALOCK_DBHOST=aqua-db
+      - SCALOCK_DBPORT=5432
+    ports:
+      - "8080:8080"
+      - "443:443"
+    depends_on:
+      - aqua-db
+
+  # Aqua Database
+  aqua-db:
+    image: postgres:12
+    container_name: aqua-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgrespassword
+      - POSTGRES_DB=slkdb
+    volumes:
+      - aqua-db-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+volumes:
+  aqua-db-data:

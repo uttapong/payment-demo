@@ -11,9 +11,12 @@ pipeline {
         KUBECTL_HOME = '/opt/homebrew/bin/kubectl'
         BUILD_DATE = new Date().format('yyyy-MM-dd')
         IMAGE_TAG = "${BUILD_DATE}-${BUILD_NUMBER}"
-        IMAGE_NAME = 'orders' // Variable for the image name
-        DOCKER_USERNAME = 'maxca789' // Variable for Docker Hub username
+        IMAGE_NAME = 'orders'
+        DOCKER_USERNAME = 'maxca789'
         K8S_NAMESPACE = 'minikube-local'
+        GIT_URL = 'https://github.com/maxca/spring-java-jenkins.git' // Git repository URL
+        GIT_BRANCH = 'main' // Git branch to build
+        SONAR_PROJECT_KEY = 'orders' // SonarQube project key
     }
     stages {
         stage('Clean Workspace') {
@@ -35,10 +38,13 @@ pipeline {
         }
         stage('Build Maven') {
             steps {
-                checkout([$class: 'GitSCM', credentialsId: 'githubpwd', branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[url: 'https://github.com/maxca/spring-java-jenkins.git']]])
+                checkout([$class: 'GitSCM', credentialsId: 'githubpwd', branches: [[name: "*/${GIT_BRANCH}"]], extensions: [], userRemoteConfigs: [[url: "${GIT_URL}"]]])
+                
                 sh 'mvn clean install'
+                sh 'ls -ahl target'
             }
         }
+      
         stage('Clean Docker State') {
             steps {
                 script {
@@ -50,8 +56,8 @@ pipeline {
             steps {
                 script {
                     sh '${DOCKER_HOME} pull openjdk:23-rc-jdk-slim'
-                    // sh 'curl -vvv https://auth.docker.io/token'
                     sh '${DOCKER_HOME} network prune --force'
+                    sh 'ls -lah target'
                     sh '${DOCKER_HOME} build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
                 }
             }
@@ -75,9 +81,20 @@ pipeline {
                 }
             }
         }
+        stage('Trigger DevSecOps Pipeline') {
+            steps {
+                build job: 'DevSecOps-Pipeline', 
+                parameters: [
+                    string(name: 'GIT_URL', value: "${GIT_URL}", description: 'Git repository URL'),
+                    string(name: 'GIT_BRANCH', value: "${GIT_BRANCH}", description: 'Git branch to build'),
+                    string(name: 'SONAR_PROJECT_KEY', value: "${SONAR_PROJECT_KEY}", description: 'SonarQube project key')
+                ],
+                wait: false
+            }
+        }
         stage('Deploy to k8s') {
             steps {
-                withKubeConfig([credentialsId: 'kubectlpwd', serverUrl: 'https://127.0.0.1:50614']) {
+                withKubeConfig([credentialsId: 'kubectlpwd', serverUrl: 'https://127.0.0.1:51163']) {
                     script {
                         // Replace the image tag in the deployment YAML file
                         sh "sed -i '' 's/\$IMAGE_TAG/$IMAGE_TAG/g' k8s/deployment.yaml"
