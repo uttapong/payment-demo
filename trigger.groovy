@@ -3,116 +3,105 @@ pipeline {
     tools {
         maven 'maven_3_9'
     }
+    
+    parameters {
+        string(name: 'GIT_URL', defaultValue: 'https://github.com/maxca/spring-java-jenkins.git', description: 'Git repository URL')
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        string(name: 'SONAR_PROJECT_KEY', defaultValue: 'jenkins', description: 'SonarQube project key')
+        string(name: 'DOCKER_IMAGE', defaultValue: 'your-docker-image:tag', description: 'Docker image to scan')
+    }
+    
     environment {
-        // Define variables for Docker paths and timeouts
-        DOCKER_HOME = '/opt/homebrew/bin/docker'
-        DOCKER_CLIENT_TIMEOUT = '1000'
-        COMPOSE_HTTP_TIMEOUT = '1000'
-        KUBECTL_HOME = '/opt/homebrew/bin/kubectl'
-        BUILD_DATE = new Date().format('yyyy-MM-dd')
-        IMAGE_TAG = "${BUILD_DATE}-${BUILD_NUMBER}"
-        IMAGE_NAME = 'orders'
-        DOCKER_USERNAME = 'maxca789'
-        K8S_NAMESPACE = 'minikube-local'
-        GIT_URL = 'https://github.com/maxca/spring-java-jenkins.git' // Git repository URL
-        GIT_BRANCH = 'main' // Git branch to build
-        SONAR_PROJECT_KEY = 'orders' // SonarQube project key
+        SONAR_JAVA_BINARIES = 'target/classes'
+        ZIP_FILE_NAME = "${params.DOCKER_IMAGE}".replace(':', '-') // Replace colon in Docker image name
     }
-    stages {
-        stage('Clean Workspace') {
-            steps {
-                deleteDir() // Clean the workspace before starting
-            }
-        }
-        stage('Set Environment Variables') {
-            steps {
-                script {
-                    sh '''
-                        export DOCKER_CLIENT_TIMEOUT=12000
-                        export COMPOSE_HTTP_TIMEOUT=12000
-                        echo "Docker client timeout: $DOCKER_CLIENT_TIMEOUT"
-                        echo "Compose HTTP timeout: $COMPOSE_HTTP_TIMEOUT"
-                    '''
-                }
-            }
-        }
-        stage('Build Maven') {
-            steps {
-                checkout([$class: 'GitSCM', credentialsId: 'githubpwd', branches: [[name: "*/${GIT_BRANCH}"]], extensions: [], userRemoteConfigs: [[url: "${GIT_URL}"]]])
-                
-                sh 'mvn clean install'
-                sh 'ls -ahl target'
-            }
-        }
-      
-        stage('Clean Docker State') {
-            steps {
-                script {
-                    sh '${DOCKER_HOME} system prune -af --volumes' // Clean all Docker resources
-                }
-            }
-        }
-        stage('Build Image') {
-            steps {
-                script {
-                    sh '${DOCKER_HOME} pull openjdk:23-rc-jdk-slim'
-                    sh '${DOCKER_HOME} network prune --force'
-                    sh 'ls -lah target'
-                    sh '${DOCKER_HOME} build -t ${IMAGE_NAME}:${IMAGE_TAG} .'
-                }
-            }
-        }
-        stage('Push Image to Hub') {
-            steps {
-                script {
-                    withCredentials([usernamePassword(credentialsId: 'dockerpwd', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
-                        sh '${DOCKER_HOME} login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}'
-                        sh '${DOCKER_HOME} tag ${IMAGE_NAME}:${IMAGE_TAG} ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}'
-                        sh '${DOCKER_HOME} push ${DOCKER_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}'
 
-                        // Check for dangling images and remove them if any are found
-                        def danglingImages = sh(script: "${DOCKER_HOME} images -f 'dangling=true' -q", returnStdout: true).trim()
-                        if (danglingImages) {
-                            sh "${DOCKER_HOME} rmi -f ${danglingImages}"
-                        } else {
-                            echo 'No dangling images to remove.'
-                        }
-                    }
+    stages { 
+        stage('Prepare') {
+            steps {
+                script {
+                    // Create directory to store artifacts
+                    sh 'mkdir -p scan-artifacts'
                 }
             }
         }
-        stage('Trigger DevSecOps Pipeline') {
+        stage('SCM Checkout') {
             steps {
-                build job: 'DevSecOps-Pipeline', 
-                parameters: [
-                    string(name: 'GIT_URL', value: "${GIT_URL}", description: 'Git repository URL'),
-                    string(name: 'GIT_BRANCH', value: "${GIT_BRANCH}", description: 'Git branch to build'),
-                    string(name: 'SONAR_PROJECT_KEY', value: "${SONAR_PROJECT_KEY}", description: 'SonarQube project key')
-                ],
-                wait: false
+                git branch: "${params.GIT_BRANCH}",
+                    url: "${params.GIT_URL}",
+                    credentialsId: 'gitlabpwd'
             }
         }
-        stage('Deploy to k8s') {
+        stage('Build') {
             steps {
-                withKubeConfig([credentialsId: 'kubectlpwd', serverUrl: 'https://127.0.0.1:51163']) {
-                    script {
-                        // Replace the image tag in the deployment YAML file
-                        sh "sed -i '' 's/\$IMAGE_TAG/$IMAGE_TAG/g' k8s/deployment.yaml"
-                        sh 'cat k8s/deployment.yaml'
+                sh 'mvn clean install'
+            }
+        }
+        stage('Run SonarQube') {
+            environment {
+                scannerHome = tool 'sonar_tool'
+            }
+            steps {
+                withSonarQubeEnv(credentialsId: 'sonarpwd', installationName: 'sonar_server') {
+                    sh "${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=${params.SONAR_PROJECT_KEY} -Dsonar.java.binaries=${env.SONAR_JAVA_BINARIES}"
+                }
+            }
+        }
+        stage('OWASP Dependency-Check Vulnerabilities') {
+            steps {
+                dependencyCheck additionalArguments: ''' 
+                            -o './scan-artifacts'
+                            -s './'
+                            -f 'ALL' 
+                            --prettyPrint''', odcInstallation: 'dependency-check'
+                
+                dependencyCheckPublisher pattern: 'scan-artifacts/dependency-check-report.xml'
+            }
+        }
+        stage('Check for Outdated Dependencies') {
+            steps {
+                script {
+                    sh 'mvn versions:display-dependency-updates > scan-artifacts/dependency-updates.txt'
+                    sh 'mvn versions:display-plugin-updates > scan-artifacts/plugin-updates.txt'
+                }
+            }
+        }
+        stage('Trivy Image Scan') {
+            steps {
+                script {
+                    def result = sh(script: "/opt/homebrew/bin/trivy image --severity HIGH,CRITICAL --no-progress --exit-code 1 ${params.DOCKER_IMAGE}", returnStatus: true)
+                    if (result != 0) {
+                        echo "Trivy scan completed with exit code ${result}. Check the report for details."
+                    } else {
+                        echo "Trivy scan completed successfully."
                     }
-                    sh '${KUBECTL_HOME} get pods -n ${K8S_NAMESPACE}'
-                    sh '${KUBECTL_HOME} apply -f k8s/deployment.yaml -n ${K8S_NAMESPACE}'
-                    sh '${KUBECTL_HOME} apply -f k8s/service.yaml -n ${K8S_NAMESPACE}'
                 }
             }
         }
     }
+    
     post {
         always {
-            // Archive package version for reference
-            writeFile file: 'version.txt', text: "${IMAGE_TAG}"
-            archiveArtifacts artifacts: 'version.txt'
-            buildName("Build #${BUILD_NUMBER} - Version ${env.IMAGE_TAG}")
+            script {
+                // Ensure the scan-artifacts directory exists
+                sh 'ls -lah scan-artifacts'
+                
+                // Archive scan artifacts as a zip file
+                def zipFileName = "scan-artifacts-${env.BUILD_NUMBER}.zip"
+                sh "zip -r ${zipFileName} scan-artifacts || echo 'Zip command failed'"
+                
+                // Archive the zip file for Jenkins
+                archiveArtifacts artifacts: zipFileName
+                
+                // Clean up workspace
+                cleanWs() 
+            }
+        }
+        success {
+            echo 'SonarQube analysis and Trivy scan successful.'
+        }
+        failure {
+            echo 'Pipeline failed. Check logs for details.'
         }
     }
 }
