@@ -1,0 +1,35 @@
+version: '3'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.1
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xmx512m -Xms512m
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    networks:
+      - logging
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.7.1
+    environment:
+      - ELASTICSEARCH_URL=http://localhost:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - logging
+
+  fluentd:
+    image: fluent/fluentd:v1.14-1
+    volumes:
+      - ./fluentd/conf/fluentd.conf:/fluentd/etc/fluentd.conf
+    networks:
+      - logging
+
+networks:
+  logging:
+    driver: bridge
