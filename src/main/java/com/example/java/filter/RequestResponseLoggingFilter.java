@@ -16,12 +16,13 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.*;
+import com.example.java.constants.Constants;
 
 @Component
 public class RequestResponseLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestResponseLoggingFilter.class);
-    private static final String CORRELATION_ID_HEADER_NAME = "correlationid";
+    private static final String CORRELATION_ID_HEADER_NAME = Constants.CORRELATION_ID.toLowerCase();
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -34,8 +35,8 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
         long startTime = System.currentTimeMillis();
 
         try {
-            MDC.put("correlationId", correlationId);
-            response.setHeader(CORRELATION_ID_HEADER_NAME, correlationId);
+            MDC.put(Constants.CORRELATION_ID, correlationId);
+            response.setHeader(Constants.CORRELATION_ID, correlationId);
 
             filterChain.doFilter(requestWrapper, responseWrapper);
 
@@ -67,9 +68,9 @@ public class RequestResponseLoggingFilter extends OncePerRequestFilter {
         log.info("Request-Response processed");
 
         // Clear added MDC values, but keep correlationId
-        String correlationId = MDC.get("correlationId");
+        String correlationId = MDC.get(Constants.CORRELATION_ID);
         MDC.clear();
-        MDC.put("correlationId", correlationId);
+        MDC.put(Constants.CORRELATION_ID, correlationId);
     }
 
     private String extractCorrelationId(HttpServletRequest request) {
