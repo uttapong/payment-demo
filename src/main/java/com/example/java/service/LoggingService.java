@@ -1,3 +1,4 @@
+// File: LoggingService.java
 package com.example.java.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,8 +10,6 @@ import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 public class LoggingService {
@@ -22,45 +21,45 @@ public class LoggingService {
         this.objectMapper = objectMapper;
     }
 
-    public void logRequestResponse(ContentCachingRequestWrapper request, ContentCachingResponseWrapper response,
-            long executionTime) {
+    public void logRequestResponse(ContentCachingRequestWrapper request, ContentCachingResponseWrapper response, long executionTime) {
         try {
-            Map<String, Object> logMap = new HashMap<>();
-            logMap.put("method", request.getMethod());
-            logMap.put("uri", request.getRequestURI());
-            logMap.put("requestHeaders", getHeadersAsString(request));
-            logMap.put("requestBody",
-                    getContentAsString(request.getContentAsByteArray(), request.getCharacterEncoding()));
-            logMap.put("responseStatus", response.getStatus());
-            logMap.put("responseHeaders", getHeadersAsString(response));
-            logMap.put("responseBody",
-                    getContentAsString(response.getContentAsByteArray(), response.getCharacterEncoding()));
-            logMap.put("executionTime", executionTime);
-            logMap.put("requestType", request.getContentType());
-
+            MDC.put("method", request.getMethod());
+            MDC.put("uri", request.getRequestURI());
+            MDC.put("requestHeaders", getHeadersAsString(request));
+            MDC.put("requestBody", getContentAsString(request.getContentAsByteArray(), request.getCharacterEncoding()));
+            MDC.put("responseStatus", String.valueOf(response.getStatus()));
+            MDC.put("responseHeaders", getHeadersAsString(response));
+            MDC.put("responseBody", getContentAsString(response.getContentAsByteArray(), response.getCharacterEncoding()));
+            MDC.put("executionTime", String.valueOf(executionTime));
+            MDC.put("requestType", request.getContentType() != null ? request.getContentType() : "");
             MDC.put("logType", "REQUEST_RESPONSE");
-            logger.info(objectMapper.writeValueAsString(logMap));
+
+            logger.info("Request and Response logged");
         } catch (Exception e) {
             logger.error("Error logging request/response", e);
         } finally {
-            MDC.remove("logType");
+            MDC.clear();
         }
     }
 
     private String getHeadersAsString(ContentCachingRequestWrapper request) {
-        return Collections.list(request.getHeaderNames()).stream()
+        return objectMapper.valueToTree(
+            Collections.list(request.getHeaderNames()).stream()
                 .collect(Collectors.toMap(
-                        headerName -> headerName,
-                        request::getHeader))
-                .toString();
+                    headerName -> headerName,
+                    request::getHeader
+                ))
+        ).toString();
     }
 
     private String getHeadersAsString(ContentCachingResponseWrapper response) {
-        return response.getHeaderNames().stream()
+        return objectMapper.valueToTree(
+            response.getHeaderNames().stream()
                 .collect(Collectors.toMap(
-                        headerName -> headerName,
-                        response::getHeader))
-                .toString();
+                    headerName -> headerName,
+                    response::getHeader
+                ))
+        ).toString();
     }
 
     private String getContentAsString(byte[] content, String encoding) {

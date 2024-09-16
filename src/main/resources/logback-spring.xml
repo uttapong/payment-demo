@@ -1,30 +1,32 @@
 <configuration>
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
-            <providers>
-                <timestamp>
-                    <fieldName>timestamp</fieldName>
-                    <pattern>yyyy-MM-dd'T'HH:mm:ss.SSSXXX</pattern>
-                </timestamp>
-                <logLevel>
-                    <fieldName>level</fieldName>
-                </logLevel>
-                <loggerName>
-                    <fieldName>logger</fieldName>
-                </loggerName>
-                <threadName>
-                    <fieldName>thread</fieldName>
-                </threadName>
-                <message>
-                    <fieldName>message</fieldName>
-                </message>
-                <mdc />
-                <exception />
-            </providers>
+    <appender name="jsonConsoleAppender" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeCallerData>true</includeCallerData>
+            <customFields>{"app_name":"orders"}</customFields>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <message>message</message>
+                <logger>logger_name</logger>
+                <thread>thread_name</thread>
+                <level>log_level</level>
+            </fieldNames>
+            <provider class="net.logstash.logback.composite.loggingevent.LoggingEventPatternJsonProvider">
+                <pattern>
+                    {
+                        <!-- "correlationId": "%mdc{correlationId}", -->
+                        <!-- "method": "%mdc{method}",
+                        "uri": "%mdc{uri}",
+                        "requestBody": "%mdc{requestBody}", -->
+                        <!-- "responseBody": "%mdc{responseBody}", -->
+                        <!-- "status": "#asLong{%mdc{status}}", -->
+                        <!-- "timeTaken": "#asLong{%mdc{timeTaken}}" -->
+                    }
+                </pattern>
+            </provider>
         </encoder>
     </appender>
 
     <root level="INFO">
-        <appender-ref ref="STDOUT" />
+        <appender-ref ref="jsonConsoleAppender"/>
     </root>
 </configuration>
