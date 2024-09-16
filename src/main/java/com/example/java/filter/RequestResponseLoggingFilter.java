@@ -21,7 +21,7 @@ import java.util.*;
 public class RequestResponseLoggingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RequestResponseLoggingFilter.class);
-    private static final String CORRELATION_ID_HEADER_NAME = "X-Correlation-ID";
+    private static final String CORRELATION_ID_HEADER_NAME = "correlationid";
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
