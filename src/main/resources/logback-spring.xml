@@ -2,7 +2,7 @@
     <appender name="jsonConsoleAppender" class="ch.qos.logback.core.ConsoleAppender">
         <encoder class="net.logstash.logback.encoder.LogstashEncoder">
             <includeCallerData>true</includeCallerData>
-            <customFields>{"app_name":"orders"}</customFields>
+            <customFields>{"app_name":"payment-kibana"}</customFields>
             <fieldNames>
                 <timestamp>timestamp</timestamp>
                 <message>message</message>
