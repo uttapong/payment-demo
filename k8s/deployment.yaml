@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: orders
+  name: payment-kibana
   labels:
-    app: orders
+    app: payment-kibana
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: orders
+      app: payment-kibana
   template:
     metadata:
       labels:
-        app: orders
+        app: payment-kibana
         version: $IMAGE_TAG
     spec:
       containers:
-      - name: orders
-        image: maxca789/orders:$IMAGE_TAG
+      - name: payment-kibana
+        image: uttapong/payment-kibana:$IMAGE_TAG
         ports:
         - containerPort: 8082
         resources:
